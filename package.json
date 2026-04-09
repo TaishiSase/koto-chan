@@ -1,0 +1,16 @@
+{
+  "name": "koto-chan",
+  "version": "1.0.0",
+  "description": "Daily photo album app for family",
+  "main": "index.js",
+  "scripts": {
+    "start": "npm install && npm run dev",
+    "dev": "npx http-server public -p 3000 -c-1"
+  },
+  "keywords": ["photo", "album", "family", "diary"],
+  "author": "Taishi Sase",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
