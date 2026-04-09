@@ -390,6 +390,19 @@ window.addEventListener('load', async function() {
     successEl.style.display = 'none';
 
     try {
+      // db が null なら再接続を試みる
+      if (!db) {
+        try {
+          const res    = await fetch('config.json');
+          const config = await res.json();
+          await initSupabase(config);
+        } catch (e) {}
+      }
+      if (!db) {
+        errEl.textContent = 'データベース接続エラー。ページを再読み込みしてください。';
+        return;
+      }
+
       var file = document.getElementById('photoInput').files[0];
       if (!file) { errEl.textContent = '写真を選択してください'; return; }
 
