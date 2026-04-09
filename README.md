@@ -16,11 +16,16 @@
 
 ### 必要なもの
 
+- Node.js (npm)
 - GitHub アカウント
 - Supabase 無料アカウント
 - Vercel アカウント（デプロイ用、GitHub と連携可能）
 
-### ステップ1: Supabase セットアップ
+### ステップ1: Node.js のインストール
+
+[Node.js 公式サイト](https://nodejs.org) から LTS 版をダウンロードしてインストールしてください。
+
+### ステップ2: Supabase セットアップ
 
 1. [Supabase](https://supabase.com) を開き、GitHub でサインアップ
 2. 新しいプロジェクトを作成
@@ -36,34 +41,23 @@ CREATE TABLE posts (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-
-CREATE TABLE storage.objects (
-  id BIGINT PRIMARY KEY,
-  name TEXT,
-  owner_id UUID,
-  created_at TIMESTAMP DEFAULT NOW()
-);
 ```
+
+> **注意**: Supabase の `storage.objects` テーブルは内部管理用のため、自分で作成する必要はありません。Storage バケットを新規作成するだけで十分です。
 
 4. Storage セットアップ:
    - 「Storage」>「New Bucket」
    - 名前: `photos`
    - Public を選択
 
-5. Policy を設定:
-   - Bucket: `photos`
-   - 「RLS Policies」から以下を許可:
-     - SELECT: すべてのユーザー
-     - INSERT: すべてのユーザー
-     - UPDATE: すべてのユーザー
+5. Policy の確認:
+   - 公開バケットにした場合、ファイルの読み込みは公開されますが、アップロード権限は別です。
+   - ブラウザから anon キーで `storage.upload()` する場合は、Storage のポリシーを設定する必要があります。
+   - `posts` テーブルも anon で操作するなら、Database 側で `SELECT` / `INSERT` / `UPDATE` のポリシーを追加してください。
 
-### ステップ2: 設定ファイル作成
+### ステップ3: 設定ファイル作成
 
-1. `public/config.json` を作成（`config.example.json` をコピー）：
-
-```bash
-cp public/config.example.json public/config.json
-```
+1. `public/config.json` を編集（既に作成済み）：
 
 2. Supabase から以下を取得:
    - Project URL → `supabaseUrl`
@@ -78,7 +72,7 @@ cp public/config.example.json public/config.json
 }
 ```
 
-### ステップ3: ローカルで実行
+### ステップ4: ローカルで実行
 
 ```bash
 npm install
@@ -87,7 +81,7 @@ npm start
 
 ブラウザで `http://localhost:3000` を開き、パスワード `ことねこ` でログイン
 
-### ステップ4: Vercel でデプロイ
+### ステップ5: Vercel でデプロイ
 
 1. このリポジトリを GitHub にプッシュ
 2. [Vercel](https://vercel.com) で GitHub リポジトリをインポート

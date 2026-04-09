@@ -2,76 +2,91 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>今日のことちゃん</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 </head>
 <body>
-  <div id="app" class="app">
-    <!-- Auth Screen -->
+  <div id="app">
+
+    <!-- 認証画面 -->
     <div id="authScreen" class="screen active">
       <div class="auth-container">
+        <div class="auth-logo">📸</div>
         <h1>今日のことちゃん</h1>
         <p class="subtitle">娘の成長アルバム</p>
-        <input type="password" id="passwordInput" placeholder="パスワードを入力" class="password-input">
+        <div class="password-wrap">
+          <input type="password" id="passwordInput" placeholder="パスワードを入力" class="password-input" autocomplete="current-password">
+          <button type="button" class="eye-btn" onclick="togglePasswordVisibility()" id="eyeIcon">👁</button>
+        </div>
         <button onclick="authenticate()" class="btn btn-primary">ログイン</button>
-        <p class="error-msg" id="authError"></p>
+        <p class="error-msg" id="authError" style="margin-top:10px;min-height:20px;"></p>
       </div>
     </div>
 
-    <!-- Main App -->
+    <!-- メインアプリ -->
     <div id="mainApp" class="screen">
+
+      <!-- ナビゲーション -->
       <nav class="navbar">
-        <h1 class="nav-title">今日のことちゃん</h1>
+        <div class="nav-top">
+          <h1 class="nav-title">📸 今日のことちゃん</h1>
+          <button class="nav-logout" onclick="logout()">ログアウト</button>
+        </div>
         <div class="nav-buttons">
-          <button class="nav-btn" onclick="goToPage('today')">今日</button>
-          <button class="nav-btn" onclick="goToPage('post')">投稿</button>
-          <button class="nav-btn" onclick="goToPage('list')">一覧</button>
-          <button class="nav-btn" onclick="goToPage('favorites')">📌 お気に入り</button>
-          <button class="nav-btn logout" onclick="logout()">ログアウト</button>
+          <button class="nav-btn" data-page="today"     onclick="goToPage('today')">今日</button>
+          <button class="nav-btn" data-page="post"      onclick="goToPage('post')">投稿</button>
+          <button class="nav-btn" data-page="list"      onclick="goToPage('list')">一覧</button>
+          <button class="nav-btn" data-page="favorites" onclick="goToPage('favorites')">⭐ お気に入り</button>
         </div>
       </nav>
 
-      <!-- Today Page -->
-      <div id="todayPage" class="page active">
+      <!-- 今日のページ -->
+      <div id="todayPage" class="page">
         <div class="page-content">
           <h2>今日の写真</h2>
           <div id="todayPhoto" class="today-photo-container">
-            <p class="no-photo">未投稿です</p>
+            <p class="no-photo">📷 未投稿です</p>
           </div>
-          <div id="todayInfo" style="margin-top: 20px; text-align: center;"></div>
+          <div id="todayInfo"></div>
         </div>
       </div>
 
-      <!-- Post Page -->
+      <!-- 投稿ページ -->
       <div id="postPage" class="page">
         <div class="page-content">
           <h2>写真を投稿する</h2>
           <form id="postForm" class="post-form">
+
             <div class="form-group">
               <label for="photoInput">写真を選択</label>
-              <input type="file" id="photoInput" accept="image/jpeg,image/png,image/heic" required>
-              <p class="help-text">JPG, PNG, HEIC に対応しています</p>
+              <input type="file" id="photoInput" accept="image/jpeg,image/png,image/heic,.heic" required>
+              <p class="help-text">JPG・PNG・HEIC に対応しています</p>
             </div>
 
             <div class="form-group">
               <label for="commentInput">コメント（30文字まで）</label>
-              <textarea id="commentInput" maxlength="30" rows="3" placeholder="今日のコメントを入力"></textarea>
-              <p class="char-count"><span id="charCount">0</span>/30</p>
+              <textarea id="commentInput" maxlength="30" rows="3" placeholder="今日のコメントを入力" required></textarea>
+              <p class="char-count"><span id="charCount">0</span> / 30</p>
             </div>
 
-            <div id="overwriteWarning" style="display: none;" class="warning">
-              ⚠️ 今日既に投稿があります。上書きされます。
+            <div id="overwriteWarning" style="display:none;" class="warning">
+              ⚠️ 今日は既に投稿があります。上書きされます。
             </div>
 
             <button type="submit" class="btn btn-primary">投稿する</button>
-            <p class="success-msg" id="postSuccess" style="display: none;">今日のことちゃんを更新しました</p>
-            <p class="error-msg" id="postError"></p>
+            <p class="success-msg" id="postSuccess" style="display:none;">✅ 今日のことちゃんを更新しました</p>
+            <p class="error-msg"   id="postError"></p>
+
           </form>
         </div>
       </div>
 
-      <!-- List Page -->
+      <!-- 一覧ページ -->
       <div id="listPage" class="page">
         <div class="page-content">
           <h2>成長アルバム</h2>
@@ -81,25 +96,25 @@
         </div>
       </div>
 
-      <!-- Favorites Page -->
+      <!-- お気に入りページ -->
       <div id="favoritesPage" class="page">
         <div class="page-content">
-          <h2>📌 お気に入り</h2>
-          <div id="favoritesList" class="favorites-list"></div>
+          <h2>⭐ お気に入り</h2>
+          <div id="favoritesList"></div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Photo Popup -->
+    </div><!-- /mainApp -->
+  </div><!-- /app -->
+
+  <!-- 写真ポップアップ -->
   <div id="photoPopup" class="photo-popup">
     <div class="popup-content">
-      <span class="popup-close" onclick="closePhotoPopup()">&times;</span>
-      <img id="popupImage" src="" alt="">
+      <span class="popup-close" onclick="closePhotoPopup()">✕</span>
+      <img id="popupImage" src="" alt="拡大写真">
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
 </html>
