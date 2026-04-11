@@ -1,6 +1,11 @@
 var db = null;
 const PASSWORD    = '20240219';
 const AUTH_EXPIRY = 24 * 60 * 60 * 1000;
+const BIRTHDAY    = new Date('2024-02-19T00:00:00');
+
+var listViewMode   = 'timeline'; // 'timeline' | 'grid'
+var _postMap       = {};         // id → post オブジェクト
+var currentPopupId = null;
 
 // ===== Supabase =====
 async function initSupabase(config) {
@@ -27,10 +32,9 @@ function authenticate() {
     errEl.textContent = 'パスワードが正しくありません';
     document.getElementById('passwordInput').value = '';
     document.getElementById('passwordInput').focus();
-    document.getElementById('authScreen').querySelector('.auth-card').style.animation = 'none';
-    setTimeout(() => {
-      document.getElementById('authScreen').querySelector('.auth-card').style.animation = 'authShake 0.4s ease';
-    }, 10);
+    const card = document.getElementById('authScreen').querySelector('.auth-card');
+    card.style.animation = 'none';
+    setTimeout(function() { card.style.animation = 'authShake 0.4s ease'; }, 10);
   }
 }
 
@@ -59,8 +63,8 @@ function showMainApp() {
 
 // ===== ページ遷移 =====
 function goToPage(pageName) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.bnav-btn').forEach(function(b) { b.classList.remove('active'); });
 
   document.getElementById(pageName + 'Page').classList.add('active');
   const btn = document.querySelector('.bnav-btn[data-page="' + pageName + '"]');
@@ -104,33 +108,162 @@ function esc(str) {
   return d.innerHTML;
 }
 
+// ===== 年齢計算 =====
+function getAge(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  let years  = d.getFullYear() - BIRTHDAY.getFullYear();
+  let months = d.getMonth()    - BIRTHDAY.getMonth();
+  if (months < 0) { years--; months += 12; }
+  return { years: years, months: months, total: years * 12 + months };
+}
+
+function getAgeStr(dateStr) {
+  const a = getAge(dateStr);
+  if (a.years === 0 && a.months === 0) return '生後すぐ';
+  if (a.years === 0) return a.months + 'ヶ月';
+  if (a.months === 0) return a.years + '歳';
+  return a.years + '歳' + a.months + 'ヶ月';
+}
+
+// 19日チェック：マイルストーン返す（月次・年次）
+function getMilestone(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (d.getDate() !== 19) return null;
+  const a = getAge(dateStr);
+  if (a.total === 0) return null;
+  if (d.getMonth() === 1 && a.months === 0 && a.years > 0) {
+    return { type: 'yearly', label: a.years + '歳のお誕生日！🎂', emoji: '🎂' };
+  }
+  return { type: 'monthly', label: a.total + 'ヶ月の記念日 🎀', emoji: '🎀' };
+}
+
+// ===== 連続記録 =====
+function calcStreak(postDates) {
+  if (!postDates || postDates.length === 0) return 0;
+  const dateSet = new Set(postDates);
+  const today = getTodayDate();
+  const cur = new Date(today + 'T00:00:00');
+  // 今日未投稿なら昨日から数える
+  if (!dateSet.has(today)) cur.setDate(cur.getDate() - 1);
+  let streak = 0;
+  while (true) {
+    const s = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0') + '-' + String(cur.getDate()).padStart(2, '0');
+    if (dateSet.has(s)) {
+      streak++;
+      cur.setDate(cur.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
 // ===== 今日のページ =====
 async function loadTodayPhoto() {
-  const photoEl = document.getElementById('todayPhoto');
-  const infoEl  = document.getElementById('todayInfo');
+  const photoEl  = document.getElementById('todayPhoto');
+  const infoEl   = document.getElementById('todayInfo');
+  const streakEl = document.getElementById('streakBanner');
+  const otdEl    = document.getElementById('onThisDay');
+
+  // 初期化
+  streakEl.style.display = 'none';
+  otdEl.style.display    = 'none';
+
   try {
     const { data } = await db.from('posts').select('*').eq('post_date', getTodayDate()).single();
     if (!data) {
       photoEl.innerHTML         = '<p class="no-photo">📷<br>未投稿です</p>';
       photoEl.style.borderColor = '';
       infoEl.innerHTML          = '';
-      return;
-    }
-    const s = getSeason(data.post_date);
-    photoEl.style.borderColor = s.color;
-    photoEl.innerHTML = '<img src="' + data.image_url + '" alt="今日の写真" onclick="showPhotoPopup(\'' + data.image_url + '\')">';
+    } else {
+      _postMap[data.id] = data;
+      const s         = getSeason(data.post_date);
+      const milestone = getMilestone(data.post_date);
+      const ageStr    = getAgeStr(data.post_date);
 
-    infoEl.innerHTML =
-      '<div class="today-meta">' +
-        '<span class="season-badge">' + s.emoji + ' ' + formatDate(data.post_date) + '</span>' +
-        '<button class="fav-btn" onclick="toggleFavorite(\'' + data.id + '\', ' + data.is_favorite + ', \'today\')">' +
-          (data.is_favorite ? '⭐' : '☆') +
-        '</button>' +
-      '</div>' +
-      '<p class="today-comment">' + esc(data.comment) + '</p>';
+      photoEl.style.borderColor = milestone
+        ? (milestone.type === 'yearly' ? '#FFD700' : '#FFAACC')
+        : s.color;
+      photoEl.innerHTML =
+        '<img src="' + data.image_url + '" alt="今日の写真" onclick="showPhotoPopup(\'' + data.id + '\')">';
+
+      infoEl.innerHTML =
+        (milestone ? '<div class="today-milestone-banner">' + milestone.emoji + ' ' + milestone.label + '</div>' : '') +
+        '<div class="today-meta">' +
+          '<span class="season-badge">' + s.emoji + ' ' + formatDate(data.post_date) + '</span>' +
+          '<div class="today-meta-right">' +
+            '<span class="age-badge-today">' + ageStr + '</span>' +
+            '<button class="fav-btn" onclick="toggleFavorite(\'' + data.id + '\', ' + data.is_favorite + ', \'today\')">' +
+              (data.is_favorite ? '⭐' : '☆') +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+        '<p class="today-comment">' + esc(data.comment) + '</p>' +
+        '<button class="line-share-btn" onclick="shareTodayToLine()">🟢 LINEでシェア</button>';
+    }
   } catch (err) {
     console.error('今日の写真エラー:', err);
   }
+
+  // ストリーク & 過去の今日（並行取得）
+  loadTodayExtras();
+}
+
+async function loadTodayExtras() {
+  const streakEl = document.getElementById('streakBanner');
+  const otdEl    = document.getElementById('onThisDay');
+  try {
+    const { data } = await db.from('posts').select('*').order('post_date', { ascending: false });
+    if (!data || data.length === 0) return;
+
+    data.forEach(function(p) { _postMap[p.id] = p; });
+
+    // ストリーク
+    const streak = calcStreak(data.map(function(p) { return p.post_date; }));
+    if (streak >= 2) {
+      streakEl.innerHTML =
+        '<span class="streak-flame">🔥</span>' +
+        '<span class="streak-count">' + streak + '日</span>' +
+        '<span class="streak-label">連続投稿中！</span>';
+      streakEl.style.display = 'flex';
+    }
+
+    // 過去の今日
+    const today = new Date(getTodayDate() + 'T00:00:00');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = getTodayDate();
+    const sameDayPosts = data.filter(function(p) {
+      return p.post_date !== todayStr && p.post_date.slice(5) === mm + '-' + dd;
+    });
+
+    if (sameDayPosts.length === 0) return;
+
+    otdEl.style.display = 'block';
+    otdEl.innerHTML = '<h3 class="otd-title">📅 過去の今日</h3>';
+    sameDayPosts.forEach(function(post) {
+      const d = new Date(post.post_date + 'T00:00:00');
+      const item = document.createElement('div');
+      item.className = 'otd-item';
+      item.innerHTML =
+        '<img src="' + post.image_url + '" class="otd-img" onclick="showPhotoPopup(\'' + post.id + '\')">' +
+        '<div class="otd-info">' +
+          '<div class="otd-year">' + d.getFullYear() + '年</div>' +
+          '<div class="otd-age">' + getAgeStr(post.post_date) + '</div>' +
+          '<div class="otd-comment">' + esc(post.comment) + '</div>' +
+        '</div>';
+      otdEl.appendChild(item);
+    });
+  } catch(e) { /* サイレント失敗 */ }
+}
+
+function shareTodayToLine() {
+  const todayStr = getTodayDate();
+  var post = null;
+  Object.values(_postMap).forEach(function(p) { if (p.post_date === todayStr) post = p; });
+  if (!post) return;
+  const text = '今日のことちゃん ✨\n' + formatDate(post.post_date) + '\n「' + post.comment + '」\n' + post.image_url;
+  window.open('https://line.me/R/share?text=' + encodeURIComponent(text), '_blank');
 }
 
 // ===== スケルトン =====
@@ -148,7 +281,12 @@ function renderSkeletons(container, count) {
 
 // ===== 一覧ページ =====
 async function loadAllPhotos() {
+  if (listViewMode === 'grid') { await loadGridView(); return; }
+
   const container = document.getElementById('photoTimeline');
+  document.getElementById('timelineContainer').style.display = '';
+  document.getElementById('gridContainer').style.display = 'none';
+  document.getElementById('listHint').style.display = '';
   renderSkeletons(container, 5);
 
   try {
@@ -164,6 +302,7 @@ async function loadAllPhotos() {
     var lastMonth = null, lastWeek = null;
 
     data.forEach(function(post, idx) {
+      _postMap[post.id] = post;
       const date  = new Date(post.post_date + 'T00:00:00');
       const month = date.getFullYear() + '年' + (date.getMonth() + 1) + '月';
       const week  = getWeekNumber(date);
@@ -183,12 +322,10 @@ async function loadAllPhotos() {
       lastWeek = week;
 
       const card = makeCard(post, s);
-      // stagger animation
       card.style.animationDelay = Math.min(idx, 12) * 60 + 'ms';
       container.appendChild(card);
     });
 
-    // カードをvisibleにしてアニメーション発火
     requestAnimationFrame(function() {
       container.querySelectorAll('.timeline-card').forEach(function(c) {
         c.classList.add('visible');
@@ -203,6 +340,86 @@ async function loadAllPhotos() {
   }
 }
 
+// ===== グリッドビュー =====
+async function loadGridView() {
+  const container = document.getElementById('gridContainer');
+  document.getElementById('timelineContainer').style.display = 'none';
+  document.getElementById('gridContainer').style.display = '';
+  document.getElementById('listHint').style.display = 'none';
+  container.innerHTML = '<p style="padding:20px;color:var(--muted);font-size:14px;">読み込み中…</p>';
+
+  try {
+    const { data, error } = await db.from('posts').select('*').order('post_date', { ascending: false });
+    if (error) throw error;
+    container.innerHTML = '';
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p class="empty-msg">まだ投稿がありません 📷</p>';
+      return;
+    }
+
+    data.forEach(function(p) { _postMap[p.id] = p; });
+    renderGridView(data);
+
+  } catch (err) {
+    container.innerHTML = '<p class="error-msg-inline">読み込みに失敗しました</p>';
+  }
+}
+
+function renderGridView(data) {
+  const container = document.getElementById('gridContainer');
+  container.innerHTML = '';
+
+  // 年月ごとにグループ化
+  var groups = {}, groupOrder = [];
+  data.forEach(function(post) {
+    const d   = new Date(post.post_date + 'T00:00:00');
+    const key = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(post);
+  });
+
+  groupOrder.forEach(function(month) {
+    const section = document.createElement('div');
+    section.className = 'grid-month-section';
+
+    const label = document.createElement('h3');
+    label.className = 'grid-month-label';
+    label.textContent = month;
+    section.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'photo-grid';
+
+    groups[month].forEach(function(post) {
+      const item = document.createElement('div');
+      const milestone = getMilestone(post.post_date);
+      item.className = 'grid-item' + (milestone ? ' grid-item-milestone' : '');
+
+      const d = new Date(post.post_date + 'T00:00:00');
+      item.innerHTML =
+        '<img src="' + post.image_url + '" alt="' + esc(post.comment) + '" onclick="showPhotoPopup(\'' + post.id + '\')">' +
+        '<div class="grid-item-date">' + d.getDate() + '日</div>' +
+        (milestone ? '<div class="grid-item-milestone-badge">' + milestone.emoji + '</div>' : '');
+      grid.appendChild(item);
+    });
+
+    section.appendChild(grid);
+    container.appendChild(section);
+  });
+}
+
+function toggleListView() {
+  listViewMode = listViewMode === 'timeline' ? 'grid' : 'timeline';
+  const btn = document.getElementById('viewToggleBtn');
+  if (listViewMode === 'grid') {
+    btn.textContent = '📜 タイムライン';
+  } else {
+    btn.textContent = '📅 月別グリッド';
+  }
+  loadAllPhotos();
+}
+
 function makeDivider(type, label) {
   const el = document.createElement('div');
   el.className = 'h-divider ' + type + '-divider';
@@ -211,17 +428,21 @@ function makeDivider(type, label) {
 }
 
 function makeCard(post, s) {
-  const card    = document.createElement('div');
-  card.className = 'timeline-card ' + s.name;
+  const card      = document.createElement('div');
+  const milestone = getMilestone(post.post_date);
+  const ageStr    = getAgeStr(post.post_date);
+  card.className  = 'timeline-card ' + s.name + (milestone ? ' milestone-card' : '');
   card.innerHTML =
+    (milestone ? '<div class="milestone-banner">' + milestone.label + '</div>' : '') +
     '<div class="card-header">' +
       '<span class="season-icon">' + s.emoji + '</span>' +
+      '<span class="age-badge">' + ageStr + '</span>' +
       '<span class="fav-star" onclick="toggleFavorite(\'' + post.id + '\', ' + post.is_favorite + ', \'list\')">' +
         (post.is_favorite ? '⭐' : '☆') +
       '</span>' +
     '</div>' +
     '<div class="timeline-date">' + formatDate(post.post_date) + '</div>' +
-    '<img src="' + post.image_url + '" alt="' + esc(post.comment) + '" class="timeline-image" onclick="showPhotoPopup(\'' + post.image_url + '\')">' +
+    '<img src="' + post.image_url + '" alt="' + esc(post.comment) + '" class="timeline-image" onclick="showPhotoPopup(\'' + post.id + '\')">' +
     '<div class="timeline-comment">' + esc(post.comment) + '</div>';
   return card;
 }
@@ -229,13 +450,6 @@ function makeCard(post, s) {
 // ===== お気に入りページ =====
 async function loadFavorites() {
   const container = document.getElementById('favoritesList');
-  container.innerHTML = '<div style="padding:0 24px"><div style="display:flex;gap:16px;">' +
-    Array(3).fill('<div class="skeleton-card"></div>').join('') + '</div></div>';
-
-  // skeleton内にshimmerを入れる
-  renderSkeletons(container.querySelector('div div'), 3);
-
-  // 実際はwrapperごと作り直す
   container.innerHTML = '';
   const wrapper  = document.createElement('div');
   const tWrapper = document.createElement('div');
@@ -243,7 +457,6 @@ async function loadFavorites() {
   const timeline = document.createElement('div');
   timeline.className = 'photo-timeline';
 
-  // skeleton先表示
   renderSkeletons(timeline, 3);
   tWrapper.appendChild(timeline);
   wrapper.appendChild(tWrapper);
@@ -259,6 +472,7 @@ async function loadFavorites() {
       return;
     }
     data.forEach(function(post, idx) {
+      _postMap[post.id] = post;
       const card = makeCard(post, getSeason(post.post_date));
       card.style.animationDelay = Math.min(idx, 12) * 60 + 'ms';
       timeline.appendChild(card);
@@ -281,7 +495,6 @@ async function toggleFavorite(postId, current, ctx) {
       .update({ is_favorite: !current, updated_at: new Date() }).eq('id', postId);
     if (error) throw error;
 
-    // アニメーション発火
     var stars = document.querySelectorAll('.fav-star, .fav-btn');
     stars.forEach(function(el) {
       if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(postId)) {
@@ -300,15 +513,27 @@ async function toggleFavorite(postId, current, ctx) {
 }
 
 // ===== 写真ポップアップ =====
-function showPhotoPopup(url) {
-  document.getElementById('popupImage').src = url;
+function showPhotoPopup(postId) {
+  const post = _postMap[postId];
+  if (!post) return;
+  currentPopupId = postId;
+  document.getElementById('popupImage').src = post.image_url;
   document.getElementById('photoPopup').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
+
 function closePhotoPopup() {
   document.getElementById('photoPopup').classList.remove('active');
   document.getElementById('popupImage').src = '';
   document.body.style.overflow = '';
+  currentPopupId = null;
+}
+
+function sharePopupToLine() {
+  const post = _postMap[currentPopupId];
+  if (!post) return;
+  const text = '今日のことちゃん ✨\n' + formatDate(post.post_date) + '\n「' + post.comment + '」\n' + post.image_url;
+  window.open('https://line.me/R/share?text=' + encodeURIComponent(text), '_blank');
 }
 
 // ===== スワイプで閉じる（縦スワイプ） =====
@@ -321,6 +546,32 @@ function closePhotoPopup() {
     if (Math.abs(e.changedTouches[0].clientY - startY) > 80) closePhotoPopup();
   }, { passive: true });
 })();
+
+// ===== 画像圧縮（Canvas, max 1920px, 85% JPEG） =====
+async function compressImage(file) {
+  return new Promise(function(resolve) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      const MAX = 1920;
+      var w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else       { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(function(blob) {
+        const name = file.name.replace(/\.[^.]+$/, '.jpg');
+        resolve(new File([blob], name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.85);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
 
 // ===== HEIC変換 =====
 async function convertHEIC(file) {
@@ -419,7 +670,7 @@ window.addEventListener('load', async function() {
     successEl.style.display = 'none';
 
     try {
-      // db再接続
+      // db 再接続
       if (!db) {
         try {
           const r = await fetch('config.json');
@@ -435,7 +686,9 @@ window.addEventListener('load', async function() {
       const comment = document.getElementById('commentInput').value.trim();
       if (!comment) { errEl.textContent = 'コメントを入力してください'; return; }
 
+      // HEIC変換 → Canvas圧縮
       file = await convertHEIC(file);
+      file = await compressImage(file);
 
       const today = getTodayDate();
       const { data: existing } = await db.from('posts').select('image_url').eq('post_date', today).single();

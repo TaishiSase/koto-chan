@@ -55,10 +55,12 @@
     <!-- 今日のページ -->
     <div id="todayPage" class="page">
       <div class="today-wrap">
+        <div id="streakBanner" class="streak-banner" style="display:none;"></div>
         <div id="todayPhoto" class="today-hero">
           <p class="no-photo">📷<br>未投稿です</p>
         </div>
         <div id="todayInfo" class="today-info"></div>
+        <div id="onThisDay" class="on-this-day" style="display:none;"></div>
       </div>
     </div>
 
@@ -106,12 +108,16 @@
     <!-- 一覧ページ -->
     <div id="listPage" class="page">
       <div class="list-header">
-        <h2 class="page-title">成長アルバム</h2>
-        <p class="list-hint">← スワイプで過去へ →</p>
+        <div class="list-header-top">
+          <h2 class="page-title">成長アルバム</h2>
+          <button class="view-toggle-btn" id="viewToggleBtn" onclick="toggleListView()">📅 月別グリッド</button>
+        </div>
+        <p class="list-hint" id="listHint">← スワイプで過去へ →</p>
       </div>
       <div id="timelineContainer" class="timeline-container">
         <div id="photoTimeline" class="photo-timeline"></div>
       </div>
+      <div id="gridContainer" class="grid-container" style="display:none;"></div>
     </div>
 
     <!-- お気に入りページ -->
@@ -149,6 +155,11 @@
     <div class="popup-inner">
       <button class="popup-close" onclick="closePhotoPopup()">✕</button>
       <img id="popupImage" src="" alt="拡大写真">
+      <div class="popup-actions">
+        <button id="popupLineBtn" class="popup-line-btn" onclick="sharePopupToLine()">
+          <span>🟢</span> LINEでシェア
+        </button>
+      </div>
     </div>
   </div>
 
