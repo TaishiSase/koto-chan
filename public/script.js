@@ -1,5 +1,5 @@
 var db = null;
-const PASSWORD    = '20240219';
+const PASSWORD    = 'kotoneko';
 const AUTH_EXPIRY = 24 * 60 * 60 * 1000;
 const BIRTHDAY    = new Date('2024-02-19T00:00:00');
 
