@@ -19,29 +19,8 @@
 </head>
 <body>
 
-  <!-- 認証画面 -->
-  <div id="authScreen" class="auth-screen active">
-    <div class="auth-bg">
-      <div class="auth-blob blob1"></div>
-      <div class="auth-blob blob2"></div>
-      <div class="auth-blob blob3"></div>
-    </div>
-    <div class="auth-card">
-      <div class="auth-icon">📸</div>
-      <h1 class="auth-title">今日のことちゃん</h1>
-      <p class="auth-sub">娘の成長アルバム</p>
-      <div class="password-wrap">
-        <input type="password" id="passwordInput" placeholder="パスワードを入力"
-               class="password-input" autocomplete="current-password">
-        <button type="button" class="eye-btn" onclick="togglePasswordVisibility()" id="eyeIcon">👁</button>
-      </div>
-      <button onclick="authenticate()" class="btn-login">ログイン</button>
-      <p class="auth-error" id="authError"></p>
-    </div>
-  </div>
-
   <!-- メインアプリ -->
-  <div id="mainApp" class="main-app">
+  <div id="mainApp" class="main-app active">
 
     <!-- ヘッダー -->
     <header class="app-header">
@@ -49,7 +28,6 @@
         <span class="header-icon">📸</span>
         今日のことちゃん
       </h1>
-      <button class="logout-btn" onclick="logout()">ログアウト</button>
     </header>
 
     <!-- 今日のページ -->

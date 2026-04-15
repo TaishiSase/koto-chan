@@ -1,7 +1,5 @@
 var db = null;
-const PASSWORD    = 'kotoneko';
-const AUTH_EXPIRY = 24 * 60 * 60 * 1000;
-const BIRTHDAY    = new Date('2024-02-19T00:00:00');
+const BIRTHDAY = new Date('2024-02-19T00:00:00');
 
 var listViewMode   = 'timeline'; // 'timeline' | 'grid'
 var _postMap       = {};         // id → post オブジェクト
@@ -15,49 +13,6 @@ async function initSupabase(config) {
 
 // ===== 認証 =====
 function checkAuth() {
-  const t = localStorage.getItem('koto_auth_time');
-  if (t && (Date.now() - parseInt(t)) < AUTH_EXPIRY) showMainApp();
-  else { localStorage.removeItem('koto_auth_time'); showAuthScreen(); }
-}
-
-function authenticate() {
-  const pw    = document.getElementById('passwordInput').value;
-  const errEl = document.getElementById('authError');
-  if (!pw)            { errEl.textContent = 'パスワードを入力してください'; return; }
-  if (pw === PASSWORD) {
-    errEl.textContent = '';
-    localStorage.setItem('koto_auth_time', Date.now().toString());
-    showMainApp();
-  } else {
-    errEl.textContent = 'パスワードが正しくありません';
-    document.getElementById('passwordInput').value = '';
-    document.getElementById('passwordInput').focus();
-    const card = document.getElementById('authScreen').querySelector('.auth-card');
-    card.style.animation = 'none';
-    setTimeout(function() { card.style.animation = 'authShake 0.4s ease'; }, 10);
-  }
-}
-
-function togglePasswordVisibility() {
-  const input = document.getElementById('passwordInput');
-  const icon  = document.getElementById('eyeIcon');
-  if (input.type === 'password') { input.type = 'text';     icon.textContent = '🙈'; }
-  else                           { input.type = 'password'; icon.textContent = '👁'; }
-}
-
-function logout() {
-  localStorage.removeItem('koto_auth_time');
-  location.reload();
-}
-
-function showAuthScreen() {
-  document.getElementById('authScreen').classList.add('active');
-  document.getElementById('mainApp').classList.remove('active');
-}
-
-function showMainApp() {
-  document.getElementById('authScreen').classList.remove('active');
-  document.getElementById('mainApp').classList.add('active');
   goToPage('today');
 }
 
@@ -623,11 +578,6 @@ function updatePhotoPreview(file) {
 
 // ===== 初期化 =====
 window.addEventListener('load', async function() {
-
-  // Enter でログイン
-  document.getElementById('passwordInput').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') authenticate();
-  });
 
   // 文字数カウント
   document.getElementById('commentInput').addEventListener('input', function(e) {
