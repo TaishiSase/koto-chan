@@ -28,6 +28,7 @@
         <span class="header-icon">📸</span>
         今日のことちゃん
       </h1>
+      <button id="authHeaderBtn" class="auth-header-btn" onclick="showLoginModal()">🔑</button>
     </header>
 
     <!-- 今日のページ -->
@@ -138,6 +139,27 @@
           <span>🟢</span> LINEでシェア
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ログインモーダル -->
+  <div id="loginModal" class="login-modal-wrap hidden">
+    <div class="login-modal-bg" id="loginModalBg"></div>
+    <div class="login-modal-card">
+      <button class="login-modal-close" id="loginModalClose">✕</button>
+      <span class="auth-icon">📸</span>
+      <h2 class="auth-title" style="font-size:18px">ログイン</h2>
+      <p class="auth-sub">佐瀬家専用</p>
+      <div class="login-member-row">
+        <button class="login-member-btn" id="kotoPapaBtn" data-member="papa">パパ</button>
+        <button class="login-member-btn" id="kotoMamaBtn" data-member="mama">ママ</button>
+      </div>
+      <div class="password-wrap">
+        <input type="password" id="loginPwInput" class="password-input"
+          placeholder="パスワードを入力" autocomplete="current-password">
+      </div>
+      <p class="auth-error" id="loginError"></p>
+      <button class="btn-login" id="loginSubmitBtn">ログイン</button>
     </div>
   </div>
 

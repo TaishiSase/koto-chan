@@ -1,4 +1,7 @@
-var db = null;
+var db              = null;
+var cfg             = null;
+var isAuthenticated = false;
+var loginMember     = null;
 const BIRTHDAY = new Date('2024-02-19T00:00:00');
 
 var listViewMode   = 'timeline'; // 'timeline' | 'grid'
@@ -12,12 +15,67 @@ async function initSupabase(config) {
 }
 
 // ===== 認証 =====
-function checkAuth() {
+async function checkAuth() {
+  const { data: { session } } = await db.auth.getSession();
+  isAuthenticated = !!session;
+  updateAuthUI();
+  goToPage('today');
+}
+
+function updateAuthUI() {
+  const postBtn = document.querySelector('.bnav-btn[data-page="post"]');
+  const hdrBtn  = document.getElementById('authHeaderBtn');
+  if (isAuthenticated) {
+    postBtn.style.display = '';
+    hdrBtn.textContent    = 'ログアウト';
+    hdrBtn.classList.add('logged-in');
+    hdrBtn.onclick = signOut;
+  } else {
+    postBtn.style.display = 'none';
+    hdrBtn.textContent    = '🔑';
+    hdrBtn.classList.remove('logged-in');
+    hdrBtn.onclick = showLoginModal;
+  }
+}
+
+function showLoginModal() {
+  loginMember = null;
+  document.getElementById('loginPwInput').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.querySelectorAll('.login-member-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('loginModal').classList.remove('hidden');
+}
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.add('hidden');
+}
+
+async function handleLogin() {
+  const errEl = document.getElementById('loginError');
+  if (!loginMember) { errEl.textContent = 'パパかママを選んでください'; return; }
+  const pw    = document.getElementById('loginPwInput').value.trim();
+  const email = loginMember === 'papa' ? cfg.papaEmail : cfg.mamaEmail;
+  const btn   = document.getElementById('loginSubmitBtn');
+  btn.disabled    = true;
+  btn.textContent = '確認中…';
+  const { error } = await db.auth.signInWithPassword({ email, password: pw });
+  btn.disabled    = false;
+  btn.textContent = 'ログイン';
+  if (error) { errEl.textContent = 'パスワードが違います'; return; }
+  isAuthenticated = true;
+  closeLoginModal();
+  updateAuthUI();
+}
+
+async function signOut() {
+  await db.auth.signOut();
+  isAuthenticated = false;
+  updateAuthUI();
   goToPage('today');
 }
 
 // ===== ページ遷移 =====
 function goToPage(pageName) {
+  if (pageName === 'post' && !isAuthenticated) { showLoginModal(); return; }
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.querySelectorAll('.bnav-btn').forEach(function(b) { b.classList.remove('active'); });
 
@@ -586,14 +644,28 @@ window.addEventListener('load', async function() {
 
   // Supabase 初期化
   try {
-    const res    = await fetch('config.json');
-    const config = await res.json();
-    await initSupabase(config);
+    const res = await fetch('config.json');
+    cfg       = await res.json();
+    await initSupabase(cfg);
   } catch (err) {
     console.error('Supabase初期化エラー:', err);
   }
 
-  checkAuth();
+  // ログインモーダル イベント
+  document.getElementById('loginModalBg').addEventListener('click', closeLoginModal);
+  document.getElementById('loginModalClose').addEventListener('click', closeLoginModal);
+  document.getElementById('loginSubmitBtn').addEventListener('click', handleLogin);
+  document.getElementById('loginPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+  document.querySelectorAll('.login-member-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      loginMember = this.dataset.member;
+      document.querySelectorAll('.login-member-btn').forEach(b => b.classList.remove('selected'));
+      this.classList.add('selected');
+      document.getElementById('loginPwInput').focus();
+    });
+  });
+
+  await checkAuth();
 
   // 写真選択 → プレビュー & 上書き確認
   document.getElementById('photoInput').addEventListener('change', async function(e) {
